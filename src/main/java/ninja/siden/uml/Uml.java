@@ -45,7 +45,7 @@ public class Uml {
 	}
 
 	Object outgoing(Request request, Response response) throws Exception {
-		LOG.info(request);
+		LOG.debug(request);
 
 		if (request.form("token").filter(tokens::contains).isPresent() == false) {
 			return ignored;
@@ -89,7 +89,7 @@ public class Uml {
 	}
 
 	Object imgs(Request request, Response response) throws Exception {
-		LOG.info(request);
+		LOG.debug(request);
 		return request.params("encoded").map(Trial.of(transcoder()::decode))
 				.map(t -> t.either(SourceStringReader::new, ex -> {
 					LOG.fatal(ex.getMessage(), ex);
