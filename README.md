@@ -1,14 +1,15 @@
 # UMLbot
 
-UML genrator bot for Slack on top PlantUML
+UML genrator bot for Slack on top of PlantUML
 
 ## Let's try
 
-1. setup [outgoing-webhook](https://my.slack.com/services/new/outgoing-webhook)
-2. [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
-3. set URL to Heroku. URL same as Heroku application name or your domain name.
-4. set TOKEN to Heroku from outgoing-webhook
-5. set URL(s) to outgoing-webhook same as URL
+1. setup a [Slack App](https://api.slack.com/apps) and subscribe it to `app_mention` events
+3. give it access to `chat:write:bot` in the OAuth2 and Permissions tab 
+2. [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy) this app
+3. set env var URL to same as Heroku application.
+4. set env var TOKEN to "Verification Token" from the Slack App
+4. set env var BOT_TOKEN to value from Slack App (in OAUth2 and Permissions)
 
 ## Screenshot
 
@@ -30,11 +31,11 @@ Java8 or higher
 
 ## Build
 
-    ./gradlew installDist
+    ./mvnw install
 
 ## Test
 
-    ./gradlew test
+    ./mvnw test
 
 ## CI status
 
