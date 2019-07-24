@@ -1,58 +1,67 @@
 package ninja.siden.uml;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
-import org.jboss.logging.Logger;
-
-import io.undertow.server.HttpHandler;
-import io.undertow.server.handlers.cache.CacheHandler;
-import io.undertow.server.handlers.cache.DirectBufferCache;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
 import net.sourceforge.plantuml.code.Transcoder;
 import net.sourceforge.plantuml.code.TranscoderUtil;
-import ninja.siden.App;
-import ninja.siden.Renderer;
-import ninja.siden.Request;
-import ninja.siden.Response;
-import ninja.siden.util.Trial;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * @author taichi
+ * @author Dave Syer
  */
+@SpringBootApplication(proxyBeanMethods = false)
+@RestController
 public class Uml {
 
-	static final Logger LOG = Logger.getLogger(Uml.class);
+	static final Logger LOG = LoggerFactory.getLogger(Uml.class);
 
 	static final String ignored = "{\"text\":\"\"}";
 
-	final String url;
-	final Set<String> tokens;
+	@Value("${url}")
+	String url;
+	@Value("${token}")
+	Set<String> tokens;
 
-	Uml(App app, String url, Set<String> tokens) {
-		this.url = url;
-		this.tokens = tokens;
-		app.get("/favicon.ico", (req, res) -> Uml.class.getClassLoader().getResource("favicon.ico"));
-		app.get("/:encoded", this::imgs);
-		app.post("/", this::outgoing).type("application/json");
-		app.get("/", (req, res) -> "I'm running!! yey!");
+	@GetMapping("/")
+	String yay() {
+		return "I'm running!! yey!";
 	}
 
-	Object outgoing(Request request, Response response) throws Exception {
-		LOG.debug(request);
+	@PostMapping("/")
+	String outgoing(@RequestParam Map<String, String> form) throws Exception {
+		LOG.debug("" + form);
 
-		if (request.form("token").filter(tokens::contains).isPresent() == false) {
+		if (!tokens.contains(form.get("token"))) {
 			return ignored;
 		}
 
-		String tw = request.form("trigger_word").orElse("");
-		String txt = request.form("text").map(this::unescape).orElse("");
+		String tw = form.getOrDefault("trigger_word", "");
+		String txt = form.getOrDefault("text", "");
+		if (!txt.isEmpty()) {
+			txt = unescape(txt);
+		}
 		if (txt.length() < tw.length()) {
 			return ignored;
 		}
@@ -67,7 +76,7 @@ public class Uml {
 			stb.append("{\"text\":\"");
 			stb.append("very large content has come. i cant process huge content.");
 			stb.append("\"}");
-			return stb;
+			return stb.toString();
 		}
 
 		StringBuilder stb = new StringBuilder(100);
@@ -76,7 +85,7 @@ public class Uml {
 		stb.append('/');
 		stb.append(transcoder().encode(content));
 		stb.append("\"}");
-		return stb;
+		return stb.toString();
 	}
 
 	String unescape(String txt) {
@@ -88,62 +97,54 @@ public class Uml {
 		return TranscoderUtil.getDefaultTranscoder();
 	}
 
-	Object imgs(Request request, Response response) throws Exception {
-		LOG.debug(request);
-		return request.params("encoded").map(Trial.of(transcoder()::decode))
-				.map(t -> t.either(SourceStringReader::new, ex -> {
-					LOG.fatal(ex.getMessage(), ex);
-					return null;
-				}))
-				.map(v -> response.type("image/png").render(v,
-						Renderer.ofStream((m, os) -> m.generateImage(os, new FileFormatOption(FileFormat.PNG, false)))))
-				.orElse(404);
+	@GetMapping("/{encoded}")
+	ResponseEntity<byte[]> imgs(@PathVariable String encoded) throws Exception {
+		try {
+			String decoded = transcoder().decode(encoded);
+			ByteArrayOutputStream os = new ByteArrayOutputStream();
+			new SourceStringReader(decoded).generateImage(os,
+					new FileFormatOption(FileFormat.PNG, false));
+			return ResponseEntity.ok().contentType(new MediaType("image", "png"))
+					.body(os.toByteArray());
+		}
+		catch (Exception ex) {
+			LOG.error(ex.getMessage(), ex);
+			return ResponseEntity.notFound().build();
+		}
 	}
 
-	public static void main(String[] args) {
-		// https://devcenter.heroku.com/articles/dynos#local-environment-variables
-		LOG.info(System.getenv());
+	public static void main(String[] args) throws Exception {
+		SpringApplication.run(Uml.class, args);
+	}
 
-		String url = System.getenv("URL");
-		if (url == null || url.isEmpty()) {
-			LOG.fatal("URL is not defined.");
-			return;
-		}
-		try {
-			URL u = new URL(url);
-			if (u.getProtocol().startsWith("http") == false) {
-				LOG.fatal("URL protocol must be http");
+	@Bean
+	public CommandLineRunner runner() {
+		return args -> {
+
+			// https://devcenter.heroku.com/articles/dynos#local-environment-variables
+			LOG.info("" + System.getenv());
+
+			if (url == null || url.isEmpty()) {
+				LOG.error("URL is not defined.");
 				return;
 			}
-		} catch (IOException e) {
-			LOG.fatal("URL is not valid.");
-			return;
-		}
-
-		String token = System.getenv("TOKEN");
-		if (token == null || token.isEmpty()) {
-			LOG.fatal("TOKEN is not defined.");
-			return;
-		}
-		Set<String> tokens = new HashSet<>(Arrays.asList(token.split(",")));
-
-		String port = System.getenv("PORT");
-		int p = 8080;
-		if (port != null && Pattern.matches("\\d{1,5}", port)) {
-			int i = Integer.parseInt(port);
-			if (0 < i && i < 65536) {
-				p = i;
+			try {
+				URL u = new URL(url);
+				if (u.getProtocol().startsWith("http") == false) {
+					LOG.error("URL protocol must be http");
+					return;
+				}
 			}
-		}
-
-		App app = new App() {
-			@Override
-			protected HttpHandler buildHandlers() {
-				DirectBufferCache cache = new DirectBufferCache(1024, 10, 1024 * 1024 * 200);
-				return new CacheHandler(cache, super.buildHandlers());
+			catch (IOException e) {
+				LOG.error("URL is not valid.");
+				return;
 			}
+
+			if (tokens == null || tokens.isEmpty()) {
+				LOG.error("TOKEN is not defined.");
+				return;
+			}
+
 		};
-		new Uml(app, url, tokens);
-		app.listen(p).addShutdownHook();
 	}
 }

@@ -1,108 +1,51 @@
 package ninja.siden.uml;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
-import org.boon.json.JsonFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import mockit.Mock;
-import mockit.MockUp;
-import net.sourceforge.plantuml.code.Transcoder;
-import ninja.siden.App;
-import ninja.siden.Renderer;
-import ninja.siden.Request;
-import ninja.siden.Response;
-import ninja.siden.Stoppable;
+import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * @author taichi
  */
+@WebMvcTest(properties = { "url=http://example.com", "token=xxxxxxxxxx" })
 public class UmlTest {
 
-	Stoppable stopper;
-	Uml target;
-
-	static final String HOST = "http://example.com";
-	static final String TOKEN = "xxxxxxxxxx";
-
-	@Before
-	public void setUp() {
-		App app = new App();
-		Set<String> set = new HashSet<>();
-		set.add(TOKEN);
-		this.target = new Uml(app, HOST, set);
-		this.stopper = app.listen();
-	}
-
-	@After
-	public void tearDown() {
-		this.stopper.stop();
-	}
+	@Autowired
+	MockMvc mock;
 
 	@Test
 	public void outgoing() throws Exception {
-		Map<String, String> map = new HashMap<>();
-		map.put("token", TOKEN);
-		map.put("trigger_word", "@startuml");
+		MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+		map.set("token", "xxxxxxxxxx");
+		map.set("trigger_word", "@startuml");
 		String content = "hogehoge";
-		map.put("text", "@startuml\n" + content + "\n@enduml");
+		map.set("text", "@startuml\n" + content + "\n@enduml");
 
-		Request request = new MockUp<Request>() {
-			@Mock
-			Optional<String> form(String key) {
-				return Optional.ofNullable(map.get(key));
-			}
-		}.getMockInstance();
-		Response response = new MockUp<Response>() {
-		}.getMockInstance();
-		Object obj = this.target.outgoing(request, response);
-		assertNotNull(obj);
-		System.out.println(obj);
-		Msg msg = JsonFactory.fromJson(obj.toString(), Msg.class);
-		assertNotNull(msg.text);
-		assertTrue(msg.text.startsWith(HOST));
-
-		Transcoder t = Uml.transcoder();
-		String enc = t.encode(content);
-		assertTrue(msg.text.endsWith(enc));
-	}
-
-	static class Msg {
-		String text;
+		String enc = Uml.transcoder().encode(content);
+		mock.perform(post("/").contentType(MediaType.APPLICATION_FORM_URLENCODED).params(map))
+				.andExpect(jsonPath("$.text", startsWith("http://example.com")))
+				.andExpect(jsonPath("$.text", endsWith(enc)));
 	}
 
 	@Test
 	public void imgs() throws Exception {
 		String content = "Bob->Alice : hello";
 		String encoded = Uml.transcoder().encode(content);
-		Request request = new MockUp<Request>() {
-			@Mock
-			Optional<String> params(String key) {
-				return Optional.of(encoded);
-			}
-		}.getMockInstance();
-		Response response = new MockUp<Response>() {
-
-			@Mock
-			Response type(String contentType) {
-				return this.getMockInstance();
-			}
-
-			@Mock(invocations = 1)
-			Object render(Object model, Renderer<Object> renderer) {
-				return this.getMockInstance();
-			}
-		}.getMockInstance();
-		Object result = this.target.imgs(request, response);
-		assertNotNull(result);
+		mock.perform(get("/{encoded}", encoded)).andExpect(status().isOk())
+				.andExpect(content().string(notNullValue()));
 	}
 }
