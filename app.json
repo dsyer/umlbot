@@ -1,8 +1,8 @@
 {
   "name": "umlbot",
   "description": "UML genrator bot for Slack on top PlantUML",
-  "repository": "https://github.com/taichi/umlbot",
-  "keywords": ["java8", "siden", "uml"],
+  "repository": "https://github.com/dsyer/umlbot",
+  "keywords": ["java8", "spring", "uml"],
   "buildpacks": [
     {
       "url": "https://github.com/weibeld/heroku-buildpack-graphviz.git"
@@ -17,14 +17,6 @@
     },
     "TOKEN": {
       "description": "slack sent in the outgoing payload. if you want to set two or more tokens, you should set comma separated values."
-    },
-    "UMLBOT_OPTS": {
-      "description": "JVM options for this app",
-      "value": "-Djava.util.logging.config.file=/app/logging.properties"
-    },
-    "SIDEN_ENV": {
-      "description": "siden running mode",
-      "value": "production"
     },
     "GRAPHVIZ_DOT": {
       "description": "graphviz install dir. see https://github.com/weibeld/heroku-buildpack-graphviz-src/blob/master/bin/compile",
