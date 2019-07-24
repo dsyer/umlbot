@@ -35,6 +35,7 @@ public class UmlTest {
 	public void outgoing() throws Exception {
 		EventWrapper map = new EventWrapper();
 		map.setToken("xxxxxxxxxx");
+		map.setText("<@UID> hogehoge");
 		String content = "hogehoge";
 
 		String enc = Uml.transcoder().encode(content);

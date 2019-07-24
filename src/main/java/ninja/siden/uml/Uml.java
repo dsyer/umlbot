@@ -6,6 +6,8 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -68,20 +70,14 @@ public class Uml {
 				return ignored;
 			}
 
-			String tw = "";
-			String txt = "hogehoge";
-			if (!txt.isEmpty()) {
-				txt = unescape(txt);
+			String content = content(form.getText());
+			if (!content.isEmpty()) {
+				content = unescape(content);
 			}
-			if (txt.length() < tw.length()) {
+			if (content.isEmpty()) {
 				return ignored;
 			}
 
-			String content = txt.substring(tw.length()).trim();
-			String end = "@enduml";
-			if (content.endsWith(end)) {
-				content = content.substring(0, content.length() - end.length());
-			}
 			if (5000 < content.length()) {
 				StringBuilder stb = new StringBuilder();
 				stb.append("{\"text\":\"");
@@ -103,6 +99,11 @@ public class Uml {
 			stb.append("\"}");
 			return stb.toString();
 		});
+	}
+	private static Pattern USER_MESSAGE_PATTERN = Pattern.compile("<@[a-zA-Z0-9]*>");
+
+	private String content(String text) {
+		return USER_MESSAGE_PATTERN.splitAsStream(text).collect(Collectors.joining()).trim();
 	}
 
 	String unescape(String txt) {
@@ -178,6 +179,7 @@ class EventWrapper {
 	private String challenge;
 	private String type;
 	private Event event;
+	private String text = "";
 
 	public String getToken() {
 		return token;
@@ -211,6 +213,14 @@ class EventWrapper {
 		this.event = event;
 	}
 
+	public String getText() {
+		return text;
+	}
+
+	public void setText(String text) {
+		this.text = text;
+	}
+
 	static class Event {
 		private Map<String, String> item = new HashMap<>();
 
@@ -231,7 +241,7 @@ class EventWrapper {
 	@Override
 	public String toString() {
 		return "EventWrapper [token=" + token + ", challenge=" + challenge + ", type="
-				+ type + ", event=" + event + "]";
+				+ type + ", event=" + event + ", text=" + text + "]";
 	}
 
 }
