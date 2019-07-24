@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * @author taichi
@@ -64,14 +65,9 @@ public class Uml {
 
 	@Bean
 	SlackClient slackClient(WebClient.Builder builder) {
-		System.err.println("TOKEN: " + botToken);
+		System.err.println("TOKEN: <" + botToken.length() + ">");
 		return new SlackClient(
-				builder.filter(ExchangeFilterFunction.ofRequestProcessor(request -> {
-					LOG.debug("Request: " + request.method() + " " + request.url());
-					request.headers()
-							.forEach((name, value) -> LOG.debug(name + ":" + value));
-					return Mono.just(request);
-				})).defaultHeader("Authorization", "Bearer " + botToken)
+				builder.defaultHeader("Authorization", "Bearer " + botToken)
 						.baseUrl("https://slack.com/api").build());
 	}
 
@@ -131,7 +127,7 @@ public class Uml {
 
 	String unescape(String txt) {
 		// https://api.slack.com/docs/formatting
-		return txt.replace("&amp", "&").replace("&lt;", "<").replace("&gt;", ">");
+		return HtmlUtils.htmlUnescape(txt);
 	}
 
 	static Transcoder transcoder() {
