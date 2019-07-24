@@ -1,11 +1,14 @@
 package ninja.siden.uml;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import reactor.blockhound.BlockHound;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -21,14 +24,16 @@ public class UmlTest {
 	@Autowired
 	WebTestClient mock;
 
+	@MockBean
+	SlackClient slackClient;
+
 	@Test
 	public void challenge() throws Exception {
 		EventWrapper map = new EventWrapper();
 		map.setToken("xxxxxxxxxx");
 		map.setChallenge("challenging");
-		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map)
-				.exchange().expectStatus().isOk().expectBody(String.class)
-				.isEqualTo("challenging");
+		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map).exchange()
+				.expectStatus().isOk().expectBody(String.class).isEqualTo("challenging");
 	}
 
 	@Test
@@ -39,9 +44,14 @@ public class UmlTest {
 		String content = "hogehoge";
 
 		String enc = Uml.transcoder().encode(content);
-		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map)
-				.exchange().expectStatus().isOk().expectBody().jsonPath("$.text")
-				.value((String text) -> valid(text, enc));
+		final ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map).exchange()
+				.expectStatus().isOk().expectBody(String.class)
+				.value(text -> assertThat(text).isNotEmpty());
+		// Thread.sleep(200L);
+		Mockito.verify(slackClient).post(captor.capture());
+		assertThat(captor.getValue().getText().endsWith(enc));
+		assertThat(captor.getValue().getText().startsWith("http://example.com"));
 	}
 
 	void valid(String text, String enc) {

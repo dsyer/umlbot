@@ -23,18 +23,22 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
+import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * @author taichi
@@ -52,6 +56,24 @@ public class Uml {
 	String url;
 	@Value("${token}")
 	Set<String> tokens;
+	@Value("${bot.token}")
+	String botToken;
+
+	@Autowired
+	SlackClient slackClient;
+
+	@Bean
+	SlackClient slackClient(WebClient.Builder builder) {
+		System.err.println("TOKEN: " + botToken);
+		return new SlackClient(
+				builder.filter(ExchangeFilterFunction.ofRequestProcessor(request -> {
+					LOG.debug("Request: " + request.method() + " " + request.url());
+					request.headers()
+							.forEach((name, value) -> LOG.debug(name + ":" + value));
+					return Mono.just(request);
+				})).defaultHeader("Authorization", "Bearer " + botToken)
+						.baseUrl("https://slack.com/api").build());
+	}
 
 	@GetMapping("/")
 	String yay() {
@@ -79,26 +101,24 @@ public class Uml {
 				return ignored;
 			}
 
-			if (5000 < content.length()) {
-				StringBuilder stb = new StringBuilder();
-				stb.append("{\"text\":\"");
-				stb.append("very large content has come. i cant process huge content.");
-				stb.append("\"}");
-				return stb.toString();
-			}
+			Message message = new Message();
 
-			StringBuilder stb = new StringBuilder(100);
-			stb.append("{\"text\":\"");
-			stb.append(url);
-			stb.append('/');
-			try {
-				stb.append(transcoder().encode(content));
+			if (5000 < content.length()) {
+				message.setText(
+						"very large content has come. i cant process huge content.");
 			}
-			catch (IOException e) {
-				throw new IllegalStateException(e);
+			else {
+				try {
+					message.setText(url + transcoder().encode(content));
+				}
+				catch (IOException e) {
+					throw new IllegalStateException(e);
+				}
 			}
-			stb.append("\"}");
-			return stb.toString();
+			message.setChannel(form.getEvent().getChannel());
+			Schedulers.elastic().schedule(() -> slackClient.post(message).block());
+
+			return "OK";
 		});
 	}
 
@@ -165,6 +185,9 @@ public class Uml {
 				LOG.error("URL is not valid.");
 				return;
 			}
+			if (!url.endsWith("/")) {
+				url = url + "/";
+			}
 
 			if (tokens == null || tokens.isEmpty()) {
 				LOG.error("TOKEN is not defined.");
@@ -173,6 +196,53 @@ public class Uml {
 
 		};
 	}
+}
+
+class SlackClient {
+
+	static final Logger LOG = LoggerFactory.getLogger(SlackClient.class);
+	private WebClient client;
+
+	public SlackClient(WebClient client) {
+		this.client = client;
+	}
+
+	Mono<Void> post(Message message) {
+		LOG.info("Reponse: " + message);
+		return client.post().uri("/chat.postMessage")
+				.contentType(MediaType.APPLICATION_JSON).body(message).exchange().log()
+				.and(Mono.empty());
+	}
+
+}
+
+class Message {
+
+	private String text = "";
+
+	private String channel;
+
+	public String getChannel() {
+		return channel;
+	}
+
+	public void setChannel(String channel) {
+		this.channel = channel;
+	}
+
+	public String getText() {
+		return text;
+	}
+
+	public void setText(String text) {
+		this.text = text;
+	}
+
+	@Override
+	public String toString() {
+		return "Message [channel=" + channel + ", text=" + text + "]";
+	}
+
 }
 
 @JsonInclude(Include.NON_EMPTY)
