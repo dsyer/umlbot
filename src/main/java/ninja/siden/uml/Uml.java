@@ -9,7 +9,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import net.sourceforge.plantuml.FileFormat;
@@ -70,7 +71,7 @@ public class Uml {
 				return ignored;
 			}
 
-			String content = content(form.getText());
+			String content = content(form.getEvent().getText());
 			if (!content.isEmpty()) {
 				content = unescape(content);
 			}
@@ -100,10 +101,12 @@ public class Uml {
 			return stb.toString();
 		});
 	}
+
 	private static Pattern USER_MESSAGE_PATTERN = Pattern.compile("<@[a-zA-Z0-9]*>");
 
 	private String content(String text) {
-		return USER_MESSAGE_PATTERN.splitAsStream(text).collect(Collectors.joining()).trim();
+		return USER_MESSAGE_PATTERN.splitAsStream(text).collect(Collectors.joining())
+				.trim();
 	}
 
 	String unescape(String txt) {
@@ -172,14 +175,13 @@ public class Uml {
 	}
 }
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(Include.NON_EMPTY)
 class EventWrapper {
 	private String token;
 	private String challenge;
 	private String type;
-	private Event event;
-	private String text = "";
+	private Event event = new Event();
+	private Map<String, Object> map = new HashMap<>();
 
 	public String getToken() {
 		return token;
@@ -213,35 +215,61 @@ class EventWrapper {
 		this.event = event;
 	}
 
-	public String getText() {
-		return text;
+	@JsonAnyGetter
+	public Map<String, Object> getMap() {
+		return this.map;
 	}
 
-	public void setText(String text) {
-		this.text = text;
+	@JsonAnySetter
+	public void setField(String key, Object value) {
+		this.map.put(key, value);
 	}
 
+	@JsonInclude(Include.NON_EMPTY)
 	static class Event {
-		private Map<String, String> item = new HashMap<>();
+		private Map<String, Object> map = new HashMap<>();
 
-		public Map<String, String> getItem() {
-			return item;
+		private String text = "";
+
+		private String channel;
+
+		public String getChannel() {
+			return channel;
 		}
 
-		public void setItem(Map<String, String> item) {
-			this.item = item;
+		public void setChannel(String channel) {
+			this.channel = channel;
+		}
+
+		public String getText() {
+			return text;
+		}
+
+		public void setText(String text) {
+			this.text = text;
 		}
 
 		@Override
 		public String toString() {
-			return "Event [item=" + item + "]";
+			return "Event [text=" + text + ", channel=" + channel + ", map=" + map + "]";
 		}
+
+		@JsonAnyGetter
+		public Map<String, Object> getMap() {
+			return this.map;
+		}
+
+		@JsonAnySetter
+		public void setField(String key, Object value) {
+			this.map.put(key, value);
+		}
+
 	}
 
 	@Override
 	public String toString() {
 		return "EventWrapper [token=" + token + ", challenge=" + challenge + ", type="
-				+ type + ", event=" + event + ", text=" + text + "]";
+				+ type + ", event=" + event + ", map=" + map + "]";
 	}
 
 }
