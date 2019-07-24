@@ -3,8 +3,13 @@ package ninja.siden.uml;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
@@ -24,9 +29,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ServerWebExchange;
 
 /**
  * @author taichi
@@ -51,16 +56,20 @@ public class Uml {
 	}
 
 	@PostMapping("/")
-	Mono<String> outgoing(ServerWebExchange exchange) throws Exception {
-		return exchange.getFormData().map(form -> form.toSingleValueMap()).map(form -> {
-			LOG.debug("" + form);
+	Mono<String> outgoing(@RequestBody Mono<EventWrapper> body) throws Exception {
+		return body.map(form -> {
+			LOG.info("" + form);
 
-			if (!tokens.contains(form.get("token"))) {
+			if (form.getChallenge() != null) {
+				return form.getChallenge();
+			}
+
+			if (!tokens.contains(form.getToken())) {
 				return ignored;
 			}
 
-			String tw = form.getOrDefault("trigger_word", "");
-			String txt = form.getOrDefault("text", "");
+			String tw = "";
+			String txt = "hogehoge";
 			if (!txt.isEmpty()) {
 				txt = unescape(txt);
 			}
@@ -160,4 +169,69 @@ public class Uml {
 
 		};
 	}
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(Include.NON_EMPTY)
+class EventWrapper {
+	private String token;
+	private String challenge;
+	private String type;
+	private Event event;
+
+	public String getToken() {
+		return token;
+	}
+
+	public void setToken(String token) {
+		this.token = token;
+	}
+
+	public String getChallenge() {
+		return challenge;
+	}
+
+	public void setChallenge(String challenge) {
+		this.challenge = challenge;
+	}
+
+	public String getType() {
+		return type;
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
+
+	public Event getEvent() {
+		return event;
+	}
+
+	public void setEvent(Event event) {
+		this.event = event;
+	}
+
+	static class Event {
+		private Map<String, String> item = new HashMap<>();
+
+		public Map<String, String> getItem() {
+			return item;
+		}
+
+		public void setItem(Map<String, String> item) {
+			this.item = item;
+		}
+
+		@Override
+		public String toString() {
+			return "Event [item=" + item + "]";
+		}
+	}
+
+	@Override
+	public String toString() {
+		return "EventWrapper [token=" + token + ", challenge=" + challenge + ", type="
+				+ type + ", event=" + event + "]";
+	}
+
 }

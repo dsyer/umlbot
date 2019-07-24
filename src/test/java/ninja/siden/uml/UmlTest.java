@@ -9,8 +9,6 @@ import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,15 +22,23 @@ public class UmlTest {
 	WebTestClient mock;
 
 	@Test
+	public void challenge() throws Exception {
+		EventWrapper map = new EventWrapper();
+		map.setToken("xxxxxxxxxx");
+		map.setChallenge("challenging");
+		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map)
+				.exchange().expectStatus().isOk().expectBody(String.class)
+				.isEqualTo("challenging");
+	}
+
+	@Test
 	public void outgoing() throws Exception {
-		MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
-		map.set("token", "xxxxxxxxxx");
-		map.set("trigger_word", "@startuml");
+		EventWrapper map = new EventWrapper();
+		map.setToken("xxxxxxxxxx");
 		String content = "hogehoge";
-		map.set("text", "@startuml\n" + content + "\n@enduml");
 
 		String enc = Uml.transcoder().encode(content);
-		mock.post().uri("/").contentType(MediaType.APPLICATION_FORM_URLENCODED).body(map)
+		mock.post().uri("/").contentType(MediaType.APPLICATION_JSON).body(map)
 				.exchange().expectStatus().isOk().expectBody().jsonPath("$.text")
 				.value((String text) -> valid(text, enc));
 	}
